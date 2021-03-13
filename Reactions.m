@@ -8,8 +8,8 @@
 
 %Cathode+electrolyte (here LCO) 
 
-T=800; %Putting a fixed temperature that i know will get a good graph for reaction C1 and C2
-        %C3 needs a higher temperature around 700-800
+T=600; %Putting a fixed temperature that i know will get a good graph for reaction C1 and C2
+        %C3 needs a higher temperature around 800
        
 [t_C1, conc_C1, rate_C1] =reaC1(T);
 [t_C2, conc_C2, rate_C2] =reaC2(T);
