@@ -18,8 +18,8 @@ T=800; %Putting a fixed temperature that i know will get a good graph for reacti
 figure 
 hold on
 legend
-%plot(t_C1,rate_C1)
-%plot(t_C2,rate_C2)
+plot(t_C1,rate_C1)
+plot(t_C2,rate_C2)
 plot(t_C3,rate_C3)
 
 function [time, conc, rate] =reaC1(T) 
