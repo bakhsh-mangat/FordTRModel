@@ -1,10 +1,10 @@
 %Code Begins Finally
 
 %defining Computation parameters
-dt=0.01;
+dt=1e-9;
 dx=1E-6;    %INCREASE OR DECREASE BY A FACTOR OF 10, ALWAYS
-t_end=100;
-t=0;
+t_end=10;
+t=0-dt;
 
 %defining geometric parameters
 %the lengths of each region
@@ -14,7 +14,7 @@ l3=20E-6;   %separator
 l4=92E-6;   %negative active material 
 l5=16E-6;   %Cu current collector 
 L=l1+l2+l3+l4+l5; 
-
+Larr=[l1 l2 l3 l4 l5];
 %defining thermophysical properties of each material  
 %structure P_i=[rho  cp  k] 
 P_cu=[8900; 385; 398];        %cu
@@ -42,28 +42,29 @@ p5=P_cu*w5;
 
 n=(L/dx)-4; %number of nodes
 %initialiseing temperature matrix
-Ti=zeros(n);        %spatial temperature array in previous temperature step 
-Tf=zeros(n);        %updated spatial temperature array
+Ti=zeros(1,n);        %spatial temperature array in previous temperature step 
+Tf=zeros(1,n);        %updated spatial temperature array
 
 T_initial=80+273;   %Initial constant battery temperature
 Tamb=25+273;        %ambiant temperature
 
-Ti=T_initial*ones(n);
+Tf=T_initial*ones(n,1);
 dT=0;
 dTmax=0;    
 dTlim=1;    %maximum allowed delta T per timestep
 
 %rection initialisation 
-yo=[0.999;0.999;1;0.15;1;1];
+yo=[0.999;0.999;1;0.15;1;1];%
 y=yo;
-for i=1:1:n
+for i=1:1:n-1
     y=[y yo];%each column of y will store the updated reaction progression
 end
 ynew=y; %will be used to store the new conc in every time step
 
-h=1000; %HTC
+h=100; %HTC
 
 while t<t_end
+disp(['t ' num2str(t) ' dt ' num2str(dt)]) ;
 t=t+dt;
 Ti=Tf;
 y=ynew;
@@ -81,15 +82,15 @@ for j=1:1:n
         rho=p5(1);
         cp=p5(2);
         k=p5(3);
-        dT=((k*(Ti(j)-Ti(j-1))/dx)-h*(Ti(j)-Tamb))*(dt/(rho*cp*dx));
+        dT=((k*(Ti(j-1)-Ti(j))/dx)-h*(Ti(j)-Tamb))*(dt/(rho*cp*dx));
         if (dT>dTmax)
             dTmax=dT;
         end
         Tf(j)=Ti(j)+dT;
     else
-        [rho, cp, k, reg , inter]=prop(j, dx, L, p1, p2, p3, p4, p5);
+        [rho, cp, k, reg , inter]=prop(j, dx, Larr, p1, p2, p3, p4, p5); %reg is region number (1 to 5) and 0 for interface, inter is interface number (1 to 4) and 0 for internal region
         %code for computing reaction heat and updating conc
-        [ynew(:,j),Qreac]=reactions(y(:,j),Ti(j), reg, inter, p2, p3, p4);
+        [ynew(:,j),Qreac]=reactions(y(:,j),Ti(j),dt, reg, inter, p2, p3, p4);
         if (inter==0)
             dT=(k*dt/((dx^2)*rho*cp))*(Ti(j+1)-2*Ti(j)+Ti(j-1))+Qreac*dt/(rho*cp);        
         elseif (inter==1)
@@ -111,19 +112,21 @@ for j=1:1:n
         Tf(j)=Ti(j)+dT;
     end
 end
-if (dTmax>=dTlim)
-    if (dt<1E-8)
-        continue
+% if (dTmax>=dTlim)
+%     if (dt>1E-7)
+%         t=t-dt;
+%         dt=0.1*dt;
+%         Tf=Ti;
+%         ynew=y;
+%     end
+% elseif (dTmax>0&&dTmax<0.1*dTlim)
+%     dt=10*dt;
+% end
+
+    if (t>0.0001 && t<0.00011)
+        plot(Tf)
+        disp('ho gaya')
     end
-    t=t-dt;
-    dt=0.1*dt;
-    Tf=Ti;
-    ynew=y;
-    continue
-end    
-if (dTmax>0&&dTmax<0.1*dTlim)
-    dt=10*dt;
-end
 end
 function [rho, cp, k, reg, inter ]=prop(i, dx, L, p1, p2, p3, p4, p5)
 %decides the location of the control volume aand spits out the relevant properties
@@ -186,16 +189,16 @@ elseif ((((L(1)+L(2)+L(3)+L(4))/dx)-3)<i)
 end
 end
 
-function [y_new,Qr]=reactions(y,T, reg, inter, p2, p3, p4)
+function [y_new,Qr]=reactions(y,T,dt, reg, inter, p2, p3, p4)
 %decides the amount of heat released by the reactions 
 
 %heat of different reactions
-hcat1=77;
-hcat2=84;
-han1=1714;
-hSEI=257;
-hsep=-233.2;
-hele=800;
+hcat1=77*1000;
+hcat2=84*1000;
+han1=1714*1000;
+hSEI=257*1000;
+hsep=-233.2*1000;
+hele=800*1000;
 
 %densities of materials
 rho_cat=1244.74;
@@ -206,7 +209,7 @@ rho_ele_cat=357.33;
 rho_ele_sep=516;
 
 %heat of reactions
-ydot=rate(y,T);
+ydot=rate(y,T); %ydot is generally negative
 Qcat1=(-hcat1*ydot(1));
 Qcat2=(-hcat2*ydot(2));
 Qan1=(-han1*ydot(3));
@@ -224,28 +227,39 @@ else
     Q_ISC=0;
 end
 
+% y_new = y*0.9;
+% Qr = 1000;
+
 if (reg==1)
     y_new=y;
     Qr=0;
-elseif (reg==2||((reg==0)&&(inter==1)))
+    disp('i was here')
+elseif ( reg==2 || ((reg==0)&&(inter==1)) )
     y_new=y+dt*ydot;
     Qr=rho_cat*Qcat1+rho_cat*Qcat2+rho_ele_cat*Qele+p2(1)*Q_ISC;
+    disp('i was here 2')
 elseif (((reg==0)&&(inter==2)))
     y_new=y+dt*ydot;
     Qr=rho_cat*Qcat1+rho_cat*Qcat2+rho_ele_cat*Qele+p2(1)*Q_ISC+rho_ele_sep*Qele+rho_sep*Qsep+p3(1)*Q_ISC;
+    disp('i was here 3')
 elseif (reg==3)
     y_new=y+dt*ydot;
     Qr=rho_ele_sep*Qele+rho_sep*Qsep+p3(1)*Q_ISC;
+    disp('i was here4')
 elseif (((reg==0)&&(inter==3)))
     y_new=y+dt*ydot;
     Qr=rho_ele_sep*Qele+rho_sep*Qsep+p3(1)*Q_ISC+rho_an*(Qan1+QSEI)+rho_ele_an*Qele+p4(1)*Q_ISC;
+    disp('i was here5')
 elseif (reg==4||((reg==0)&&(inter==4)))
     y_new=y+dt*ydot;
     Qr=rho_an*(Qan1+QSEI)+rho_ele_an*Qele+p4(1)*Q_ISC;
+    disp('i was here6')
 elseif (reg==5)
     y_new=y;
     Qr=0;
+    disp('i was here7')
 end 
+
 end
 
 function ydot=rate(y,T)
@@ -254,13 +268,13 @@ function ydot=rate(y,T)
 %reactions and the selection of those heats depending on the
 %region/interface is done by another function called reactions
 
-   c1=y(1);
-   c2=y(2);
-   a1=y(3);
-   aSEI=y(4);
-   sep=y(5);
-   el=y(6);
-   
+   c1=y(1); %cathode 1 reaction progress
+   c2=y(2); %cathode 2 reaction progress
+   a1=y(3); %anode decomposition progress
+   aSEI=y(4); %SEI decomposition progress
+   sep=y(5); %seperator meltdown progress
+   el=y(6); %electrolyte decomposition progress
+    
    R=8.314; %Gas COnstant
 %    m_an=100.58; %anode Mass
 %    m_cat=179.12;%Cathode mass
